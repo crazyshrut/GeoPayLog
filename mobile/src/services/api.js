@@ -1,11 +1,16 @@
 import axios from 'axios';
 import { getDeviceId } from '../utils/device';
 
-// IMPORTANT: Change this IP to your computer's local IP Address!
-// e.g., 'http://192.168.1.5:5000'
-// 'localhost' will NOT work on a physical Android phone.
-const API_BASE_URL = 'http://10.180.175.28:5000/api';
-// Note: I'm using a placeholder IP. Please verify your IP using 'ipconfig' later.
+// ========== TOGGLE THIS ==========
+// For LOCAL testing: use your computer's WiFi IP
+// For DEPLOYED: use your Render URL
+const USE_DEPLOYED = false;
+
+const LOCAL_URL = 'http://100.129.164.83:5000/api';
+const DEPLOYED_URL = 'https://geopaylog-api.onrender.com/api'; // ← Update after deploying
+
+const API_BASE_URL = USE_DEPLOYED ? DEPLOYED_URL : LOCAL_URL;
+// ==================================
 
 // Create an Axios instance
 const api = axios.create({
@@ -34,9 +39,8 @@ export const getHistory = async () => {
 
 export const addTransaction = async (data) => {
     try {
-        // data should be { amount, note, lat, long, deviceId }
-        // Note: deviceId is already handled by interceptor logic in theory, 
-        // but our backend expects it in body too for the POST.
+        // data should be { amount, note, category, lat, long }
+        // deviceId is handled by interceptor for header, but backend expects it in body too.
         const deviceId = await getDeviceId();
         const payload = { ...data, deviceId };
 
@@ -44,6 +48,19 @@ export const addTransaction = async (data) => {
         return response.data;
     } catch (error) {
         console.error("API Add Transaction Error:", error);
+        throw error;
+    }
+};
+
+/**
+ * v2: Delete a transaction by its _id
+ */
+export const deleteTransaction = async (transactionId) => {
+    try {
+        const response = await api.delete(`/transaction/${transactionId}`);
+        return response.data;
+    } catch (error) {
+        console.error("API Delete Transaction Error:", error);
         throw error;
     }
 };

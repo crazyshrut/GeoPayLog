@@ -38,38 +38,42 @@ if (!MONGODB_URI) {
  * Simple health check to see if server is running.
  */
 app.get('/', (req, res) => {
-    res.send('GeoPayLog API is Running 🚀');
+    res.send('GeoPayLog API v2 is Running 🚀');
 });
 
 /**
  * POST /api/log
  * Saves a new transaction with location data.
- * Expects: { deviceId, amount, note, lat, long }
+ * v2: Now accepts 'category' field.
+ * Expects: { deviceId, amount, note, category, lat, long }
  */
 app.post('/api/log', async (req, res) => {
     try {
-        const { deviceId, amount, note, lat, long } = req.body;
+        const { deviceId, amount, note, category, lat, long } = req.body;
 
         // Basic Validation
         if (!deviceId || !amount || !lat || !long) {
             return res.status(400).json({ error: 'Missing required fields (deviceId, amount, lat, long)' });
         }
 
+        // Default to 'Other' if no category provided
+        const txCategory = category || 'Other';
+
         if (dbConnected) {
             const newTransaction = new Transaction({
-                deviceId, amount, note, location: { lat, long }
+                deviceId, amount, note, category: txCategory, location: { lat, long }
             });
             const savedTx = await newTransaction.save();
-            console.log(`📝 [DB] Logged: ${note} - ₹${amount}`);
+            console.log(`📝 [DB] Logged: ${note} - ₹${amount} [${txCategory}]`);
             res.status(201).json(savedTx);
         } else {
             const newTx = {
                 _id: Math.random().toString(36).substr(2, 9),
-                deviceId, amount, note, location: { lat, long },
+                deviceId, amount, note, category: txCategory, location: { lat, long },
                 timestamp: new Date()
             };
             localTransactions.push(newTx);
-            console.log(`📝 [MEM] Logged: ${note} - ₹${amount}`);
+            console.log(`📝 [MEM] Logged: ${note} - ₹${amount} [${txCategory}]`);
             res.status(201).json(newTx);
         }
 
@@ -105,6 +109,44 @@ app.get('/api/history', async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching history:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+/**
+ * DELETE /api/transaction/:id
+ * v2: Deletes a single transaction by its MongoDB _id.
+ * Expects header: x-device-id (for ownership verification)
+ */
+app.delete('/api/transaction/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deviceId = req.headers['x-device-id'];
+
+        if (!deviceId) {
+            return res.status(400).json({ error: 'Missing x-device-id header' });
+        }
+
+        if (dbConnected) {
+            // Only delete if the transaction belongs to this device
+            const result = await Transaction.findOneAndDelete({ _id: id, deviceId });
+            if (!result) {
+                return res.status(404).json({ error: 'Transaction not found or not owned by this device' });
+            }
+            console.log(`🗑️ [DB] Deleted transaction: ${id}`);
+            res.json({ message: 'Transaction deleted', id });
+        } else {
+            const index = localTransactions.findIndex(t => t._id === id && t.deviceId === deviceId);
+            if (index === -1) {
+                return res.status(404).json({ error: 'Transaction not found' });
+            }
+            localTransactions.splice(index, 1);
+            console.log(`🗑️ [MEM] Deleted transaction: ${id}`);
+            res.json({ message: 'Transaction deleted', id });
+        }
+
+    } catch (error) {
+        console.error('Error deleting transaction:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // This model represents a single financial transaction.
-// It is designed to be simple but extensible.
+// v2: Added 'category' field for expense classification.
 // We index 'deviceId' because we will frequently query transactions for a specific device.
 
 const TransactionSchema = new mongoose.Schema({
@@ -22,6 +22,13 @@ const TransactionSchema = new mongoose.Schema({
   // A short note describing the transaction (e.g., "Lunch", "Uber").
   note: { 
     type: String 
+  },
+
+  // v2: Category to classify spending (Food, Cafe, Travel, Shop, Other)
+  category: {
+    type: String,
+    enum: ['Food', 'Cafe', 'Travel', 'Shop', 'Other'],
+    default: 'Other'
   },
 
   // Geo-spatial data to pinpoint where the transaction happened.
